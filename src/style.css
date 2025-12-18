@@ -1,0 +1,27 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  background: #f5f7fa;
+  color: #303133;
+}
+
+/* Element Plus 白天主题 */
+.el-menu {
+  border-right: none !important;
+}
+
+.el-card {
+  background: #fff !important;
+  border: 1px solid #e4e7ed !important;
+  color: #303133 !important;
+}
+
+.el-card__header {
+  border-bottom: 1px solid #e4e7ed !important;
+  color: #303133 !important;
+}
