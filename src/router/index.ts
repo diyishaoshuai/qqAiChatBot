@@ -8,6 +8,12 @@ const router = createRouter({
       redirect: '/dashboard'
     },
     {
+      path: '/login',
+      name: 'Login',
+      component: () => import('../views/Login.vue'),
+      meta: { public: true, title: '登录' }
+    },
+    {
       path: '/dashboard',
       name: 'Dashboard',
       component: () => import('../views/Dashboard.vue'),
@@ -38,6 +44,15 @@ const router = createRouter({
       meta: { title: '聊天详情' }
     }
   ]
+})
+
+router.beforeEach((to, _from, next) => {
+  const token = localStorage.getItem('token')
+  if (!to.meta.public && !token) {
+    next({ name: 'Login' })
+  } else {
+    next()
+  }
 })
 
 export default router

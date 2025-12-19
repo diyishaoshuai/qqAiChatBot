@@ -7,8 +7,10 @@ const route = useRoute()
 </script>
 
 <template>
-  <el-container class="layout-container">
-    <!-- 侧边栏 -->
+  <div class="layout-wrapper" v-if="route.name === 'Login'">
+    <router-view />
+  </div>
+  <el-container v-else class="layout-container">
     <el-aside :width="isCollapse ? '64px' : '200px'" class="aside">
       <div class="logo">
         <el-icon size="24"><ChatDotRound /></el-icon>
@@ -41,7 +43,6 @@ const route = useRoute()
       </el-menu>
     </el-aside>
 
-    <!-- 主内容区 -->
     <el-container>
       <el-header class="header">
         <el-icon class="collapse-btn" @click="isCollapse = !isCollapse">
@@ -58,6 +59,11 @@ const route = useRoute()
 </template>
 
 <style scoped>
+.layout-wrapper {
+  min-height: 100vh;
+  background: #f5f7fa;
+}
+
 .layout-container {
   height: 100vh;
 }

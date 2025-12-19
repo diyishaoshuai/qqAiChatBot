@@ -10,6 +10,8 @@
 - 📊 **数据统计** - 消息数、Token 消耗、用户排行榜等
 - 🎯 **分段发送** - 长消息智能拆分，模拟真人打字效果
 - 🌐 **Web 管理后台** - 可视化配置、查看聊天记录
+- 🔐 **登录认证** - 后台需登录后使用
+- 🗄 **MongoDB 存储** - 配置/人格/用户/消息均存储在 MongoDB
 
 ## 📸 截图
 
@@ -40,6 +42,7 @@
 - Node.js 18+
 - pnpm
 - NapCat (QQ 协议端)
+- MongoDB 5+（本地或云端）
 
 ### 1. 安装 NapCat
 
@@ -67,12 +70,22 @@ copy env.example .env   # Windows
 cp env.example .env     # Linux/Mac
 ```
 
-编辑 `.env` 文件，填入你的 API Key：
+编辑 `.env` 文件，填入你的 API Key、Mongo 连接、管理端账号：
 
 ```env
 # OpenAI
 OPENAI_API_KEY=sk-your-api-key
 OPENAI_BASE_URL=https://api.openai.com/v1
+
+# MongoDB
+MONGODB_URI=mongodb://127.0.0.1:27017/qqchatbot
+
+# 管理后台账号（请修改）
+ADMIN_USER=admin
+ADMIN_PASSWORD=admin123
+
+# JWT 密钥（请修改）
+JWT_SECRET=please-change-me
 
 # 或 DeepSeek
 OPENAI_API_KEY=sk-your-deepseek-key
@@ -106,6 +119,7 @@ pnpm dev
 
 - 管理后台：http://localhost:5173
 - 私聊你的 QQ 机器人即可开始对话
+- 首次登录账号：`admin / admin123`（请在 `.env` 修改）
 
 ## 💬 聊天指令
 
@@ -148,6 +162,10 @@ qqAiChatBot/
 |------|------|--------|
 | `OPENAI_API_KEY` | API 密钥 | - |
 | `OPENAI_BASE_URL` | API 地址 | `https://api.openai.com/v1` |
+| `MONGODB_URI` | Mongo 连接串 | `mongodb://127.0.0.1:27017/qqchatbot` |
+| `ADMIN_USER` | 后台用户名 | `admin` |
+| `ADMIN_PASSWORD` | 后台密码 | `admin123` |
+| `JWT_SECRET` | JWT 密钥 | `please-change-me` |
 | `WS_PORT` | WebSocket 端口 | `3001` |
 | `API_PORT` | HTTP API 端口 | `3002` |
 
@@ -179,6 +197,11 @@ qqAiChatBot/
 - NapCat (OneBot 11 协议)
 
 ## 📝 更新日志
+
+### v1.1.0
+- 数据改为 MongoDB 持久化
+- 新增后台登录认证
+- 配置/密钥通过 `.env` 管理
 
 ### v1.0.0
 - 初始版本
