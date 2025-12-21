@@ -80,7 +80,8 @@ const StatsSchema = new mongoose.Schema(
     todayTokens: { type: Number, default: 0 },
     weeklyMessages: { type: [Number], default: [0, 0, 0, 0, 0, 0, 0] },
     weeklyTokens: { type: [Number], default: [0, 0, 0, 0, 0, 0, 0] },
-    modelUsage: { type: Map, of: Number, default: {} },
+    // 使用普通对象而不是 Map，避免键中包含 "." 报错（如 gpt-3.5-turbo）
+    modelUsage: { type: Object, default: {} },
     lastResetDate: { type: String, default: new Date().toDateString() },
   },
   { timestamps: true }
@@ -328,7 +329,7 @@ app.get('/api/stats', authMiddleware, async (req, res) => {
     todayTokens: stats.todayTokens,
     weeklyMessages: stats.weeklyMessages,
     weeklyTokens: stats.weeklyTokens,
-    modelUsage: Object.fromEntries(stats.modelUsage || []),
+    modelUsage: stats.modelUsage || {},
     activeUsers: await ChatUser.countDocuments(),
     userRanking,
   });
@@ -467,7 +468,8 @@ async function handleEvent(event) {
     stats.todayMessages += 1;
     stats.totalTokens += tokensUsed;
     stats.todayTokens += tokensUsed;
-    stats.modelUsage.set(cfg.model, (stats.modelUsage.get(cfg.model) || 0) + 1);
+    if (!stats.modelUsage) stats.modelUsage = {};
+    stats.modelUsage[cfg.model] = (stats.modelUsage[cfg.model] || 0) + 1;
     await stats.save();
 
     // 更新用户数据

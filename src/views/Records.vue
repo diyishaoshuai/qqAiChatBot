@@ -65,7 +65,7 @@ onMounted(loadUsers)
         <el-table-column prop="messageCount" label="聊天总条数" width="150" align="center" />
         <el-table-column prop="tokenCount" label="Token消耗" width="150" align="center">
           <template #default="{ row }">
-            {{ row.tokenCount.toLocaleString() }}
+            {{ row.tokenCount.toLocaleString() }} 
           </template>
         </el-table-column>
         <el-table-column prop="lastChatTime" label="最后聊天时间" width="200" />

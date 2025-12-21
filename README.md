@@ -121,6 +121,32 @@ pnpm dev
 - 私聊你的 QQ 机器人即可开始对话
 - 首次登录账号：`admin / admin123`（请在 `.env` 修改）
 
+## 🚀 部署到云服务器
+
+### SSH 远程部署（推荐）
+
+从 Windows 通过 SSH 部署到 Linux 云服务器：
+
+```powershell
+# 交互式部署
+.\deploy-ssh.ps1
+
+# 或指定参数
+.\deploy-ssh.ps1 -ServerIP "your-server-ip" -Username "root" -SSHKeyPath "C:\Users\YourName\.ssh\id_rsa"
+```
+
+详细说明请参考：[SSH 部署指南](docs/SSH_DEPLOYMENT.md)
+
+### 其他部署方式
+
+- **Linux 服务器直接部署**：使用 `deploy.sh` 或 `deploy-aliyun.sh`
+- **Windows 服务器部署**：使用 `deploy-windows.ps1`
+
+更多部署文档：
+- [SSH 远程部署指南](docs/SSH_DEPLOYMENT.md)
+- [阿里云部署指南](docs/ALIYUN_DEPLOYMENT.md)
+- [通用部署指南](docs/DEPLOYMENT_GUIDE.md)
+
 ## 💬 聊天指令
 
 | 指令 | 说明 | 示例 |
