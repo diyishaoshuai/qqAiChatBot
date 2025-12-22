@@ -8,8 +8,36 @@ import OpenAI from 'openai';
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import fs from 'fs';
+import rateLimit from 'express-rate-limit';
+import Joi from 'joi';
+import winston from 'winston';
 
 dotenv.config();
+
+// --------- 日志系统 ---------
+const logger = winston.createLogger({
+  level: process.env.LOG_LEVEL || 'info',
+  format: winston.format.combine(
+    winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+    winston.format.errors({ stack: true }),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
+    new winston.transports.File({ filename: 'logs/combined.log' }),
+    new winston.transports.Console({
+      format: winston.format.combine(
+        winston.format.colorize(),
+        winston.format.simple()
+      )
+    })
+  ]
+});
+
+// 创建日志目录
+if (!fs.existsSync('logs')) {
+  fs.mkdirSync('logs');
+}
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/qqchatbot';
 const WS_PORT = parseInt(process.env.WS_PORT || '3001', 10);
@@ -21,7 +49,7 @@ const ENV_FILE = './.env';
 
 // --------- Mongo Models ---------
 await mongoose.connect(MONGODB_URI, { autoIndex: true });
-console.log('✅ MongoDB 已连接');
+logger.info('MongoDB 已连接');
 
 const PersonaSchema = new mongoose.Schema(
   {
@@ -32,6 +60,10 @@ const PersonaSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// 添加索引
+PersonaSchema.index({ order: 1 });
+PersonaSchema.index({ isDefault: 1 });
 
 const ConfigSchema = new mongoose.Schema(
   {
@@ -71,6 +103,11 @@ const ChatUserSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// 添加索引优化查询性能
+ChatUserSchema.index({ lastChatTime: -1 });
+ChatUserSchema.index({ messageCount: -1 });
+ChatUserSchema.index({ tokenCount: -1 });
 
 const StatsSchema = new mongoose.Schema(
   {
@@ -225,18 +262,83 @@ app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 app.use(cookieParser());
 
+// 速率限制 - 登录接口
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15分钟
+  max: 5, // 最多5次尝试
+  message: { error: '登录尝试次数过多，请15分钟后再试' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// 速率限制 - API接口
+const apiLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1分钟
+  max: 60, // 最多60次请求
+  message: { error: '请求过于频繁，请稍后再试' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// 输入验证规则
+const schemas = {
+  login: Joi.object({
+    username: Joi.string().min(1).max(50).required(),
+    password: Joi.string().min(1).max(100).required()
+  }),
+  persona: Joi.object({
+    name: Joi.string().min(1).max(50).required(),
+    prompt: Joi.string().min(1).max(2000).required(),
+    order: Joi.number().integer().min(1).optional()
+  }),
+  config: Joi.object({
+    provider: Joi.string().valid('openai', 'deepseek').optional(),
+    model: Joi.string().max(100).optional(),
+    maxTokens: Joi.number().integer().min(1).max(10000).optional(),
+    temperature: Joi.number().min(0).max(2).optional(),
+    maxHistoryLength: Joi.number().integer().min(1).max(100).optional(),
+    summaryThreshold: Joi.number().integer().min(1).max(50).optional(),
+    globalPrompt: Joi.string().max(1000).optional(),
+    enableStream: Joi.boolean().optional(),
+    apiKey: Joi.string().optional(),
+    baseURL: Joi.string().uri().optional()
+  })
+};
+
+// 验证中间件
+const validate = (schema) => {
+  return (req, res, next) => {
+    const { error } = schema.validate(req.body);
+    if (error) {
+      logger.warn('输入验证失败', { error: error.details[0].message, path: req.path });
+      return res.status(400).json({ error: error.details[0].message });
+    }
+    next();
+  };
+};
+
 // 健康检查
 app.get('/health', (req, res) => res.json({ ok: true }));
 
 // 登录
-app.post('/api/login', async (req, res) => {
-  const { username, password } = req.body || {};
-  if (!username || !password) return res.status(400).json({ error: '缺少用户名或密码' });
-  if (username !== ADMIN_USER) return res.status(401).json({ error: '用户名或密码错误' });
-  const ok = await verifyPassword(password, ADMIN_PASSWORD);
-  if (!ok) return res.status(401).json({ error: '用户名或密码错误' });
-  const token = signToken(username);
-  res.json({ token });
+app.post('/api/login', loginLimiter, validate(schemas.login), async (req, res, next) => {
+  try {
+    const { username, password } = req.body;
+    if (username !== ADMIN_USER) {
+      logger.warn('登录失败：用户名错误', { username });
+      return res.status(401).json({ error: '用户名或密码错误' });
+    }
+    const ok = await verifyPassword(password, ADMIN_PASSWORD);
+    if (!ok) {
+      logger.warn('登录失败：密码错误', { username });
+      return res.status(401).json({ error: '用户名或密码错误' });
+    }
+    const token = signToken(username);
+    logger.info('用户登录成功', { username });
+    res.json({ token });
+  } catch (err) {
+    next(err);
+  }
 });
 
 // 配置
@@ -339,8 +441,32 @@ app.get('/api/stats', authMiddleware, async (req, res) => {
   });
 });
 
+// 全局错误处理中间件（必须放在所有路由之后）
+app.use((err, req, res, next) => {
+  logger.error('服务器错误', {
+    error: err.message,
+    stack: err.stack,
+    path: req.path,
+    method: req.method
+  });
+
+  if (err.name === 'ValidationError') {
+    return res.status(400).json({ error: '数据验证失败', details: err.message });
+  }
+
+  if (err.name === 'UnauthorizedError') {
+    return res.status(401).json({ error: '未授权访问' });
+  }
+
+  if (err.name === 'MongoError' || err.name === 'MongoServerError') {
+    return res.status(500).json({ error: '数据库错误' });
+  }
+
+  res.status(500).json({ error: '服务器内部错误' });
+});
+
 const httpServer = app.listen(API_PORT, () => {
-  console.log(`📡 API 服务已启动: http://127.0.0.1:${API_PORT}`);
+  logger.info(`API 服务已启动: http://127.0.0.1:${API_PORT}`);
 });
 
 // --------- WebSocket (NapCat) ---------
@@ -348,10 +474,10 @@ let currentWs = null;
 const addPersonaStates = new Map(); // userId -> { step: 'waiting_name' | 'waiting_prompt', name: string }
 
 const wss = new WebSocketServer({ port: WS_PORT });
-console.log(`🚀 WebSocket 等待 NapCat: ws://127.0.0.1:${WS_PORT}`);
+logger.info(`WebSocket 等待 NapCat: ws://127.0.0.1:${WS_PORT}`);
 
 wss.on('connection', (ws) => {
-  console.log('✅ NapCat 已连接');
+  logger.info('NapCat 已连接');
   currentWs = ws;
 
   ws.on('message', async (data) => {
@@ -387,12 +513,12 @@ wss.on('connection', (ws) => {
       // 处理事件
       await handleEvent(msg);
     } catch (err) {
-      console.error('处理消息失败:', err);
+      logger.error('处理消息失败:', err);
     }
   });
 
   ws.on('close', () => {
-    console.log('❌ NapCat 断开');
+    logger.info('NapCat 断开');
     currentWs = null;
   });
 });
@@ -445,7 +571,7 @@ async function handleEvent(event) {
   const nickname = event.sender?.nickname || userId;
   const message = (event.raw_message || event.message || '').trim();
 
-  console.log(`📩 [${nickname}]: ${message}`);
+  logger.info(`收到消息 [${nickname}]: ${message}`);
 
   // 初始化用户
   let chatUser = await ChatUser.findOne({ userId });
@@ -513,7 +639,7 @@ async function handleEvent(event) {
 
         await sendPrivateMessage(userId, `✅ 人格添加成功！\n\n📋 人格信息：\n昵称：${addState.name}\n序号：${newOrder}\n提示词：${prompt}\n\n使用 /person ${newOrder} 切换到该人格`);
       } catch (err) {
-        console.error('添加人格失败:', err);
+        logger.error('添加人格失败:', err);
         addPersonaStates.delete(userId);
         await sendPrivateMessage(userId, '❌ 添加人格失败，请稍后重试');
       }
@@ -592,7 +718,7 @@ async function handleEvent(event) {
     }
     await chatUser.save();
   } catch (err) {
-    console.error('AI回复失败:', err);
+    logger.error('AI回复失败:', err);
     await sendPrivateMessage(userId, '抱歉，我暂时无法回复，请稍后再试。');
   }
 }
@@ -643,9 +769,9 @@ await getSingletonModel(Config);
 if ((await Persona.countDocuments()) === 0) {
   const p = new Persona({ order: 1, name: '默认助手', prompt: '你是一个友好的AI助手。', isDefault: true });
   await p.save();
-  console.log('✅ 已创建默认人格');
+  logger.info('已创建默认人格');
 }
 await getSingletonModel(Stats);
 
-console.log('🤖 QQ ChatBot 启动中...');
+logger.info('QQ ChatBot 启动完成');
 
