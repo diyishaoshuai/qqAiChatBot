@@ -43,9 +43,14 @@ const defaultBaseURL = {
 }
 
 watch(() => config.value.provider, (newProvider) => {
-  config.value.baseURL = defaultBaseURL[newProvider as keyof typeof defaultBaseURL]
-  config.value.model = modelOptions[newProvider as keyof typeof modelOptions][0].value
-})
+  if (config.value) {
+    config.value.baseURL = defaultBaseURL[newProvider as keyof typeof defaultBaseURL]
+    const options = modelOptions[newProvider as keyof typeof modelOptions]
+    if (options && options[0]) {
+      config.value.model = options[0].value
+    }
+  }
+}, { immediate: false })
 
 async function loadConfig() {
   try {

@@ -92,8 +92,9 @@ async function moveOrder(persona: Persona, direction: 'up' | 'down') {
   if (targetIdx < 0 || targetIdx >= personas.value.length) return
   
   const target = personas.value[targetIdx]
+  if (!target) return
   try {
-    await axios.post('/api/personas/swap-order', { id1: persona.id, id2: target.id })
+    await axios.post('/api/personas/swap-order', { id1: persona.id, id2: target!.id })
     loadPersonas()
   } catch {
     ElMessage.error('调整失败')

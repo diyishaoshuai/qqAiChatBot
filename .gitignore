@@ -31,3 +31,13 @@ dist-ssr
 # Server data files
 server/*.json
 !server/package.json
+
+# Deployment files
+*.zip
+deploy.ps1
+setup-ssh.ps1
+nginx-bot.conf
+.ssh/
+
+# Claude Code
+.claude/settings.local.json

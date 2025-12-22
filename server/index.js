@@ -258,7 +258,7 @@ app.post('/api/config', authMiddleware, async (req, res) => {
 // 人格
 app.get('/api/personas', authMiddleware, async (req, res) => {
   const list = await Persona.find().sort({ order: 1 });
-  res.json(list);
+  res.json(list.map(p => ({ ...p.toObject(), id: p._id.toString() })));
 });
 
 app.post('/api/personas', authMiddleware, async (req, res) => {
@@ -270,11 +270,15 @@ app.post('/api/personas', authMiddleware, async (req, res) => {
     isDefault: false,
   });
   await persona.save();
-  res.json(persona);
+  res.json({ ...persona.toObject(), id: persona._id.toString() });
 });
 
 app.put('/api/personas/:id', authMiddleware, async (req, res) => {
-  await Persona.findByIdAndUpdate(req.params.id, req.body);
+  const { id } = req.params;
+  if (!id || id === 'undefined') {
+    return res.status(400).json({ error: 'Invalid persona ID' });
+  }
+  await Persona.findByIdAndUpdate(id, req.body);
   res.json({ success: true });
 });
 
@@ -341,6 +345,7 @@ const httpServer = app.listen(API_PORT, () => {
 
 // --------- WebSocket (NapCat) ---------
 let currentWs = null;
+const addPersonaStates = new Map(); // userId -> { step: 'waiting_name' | 'waiting_prompt', name: string }
 
 const wss = new WebSocketServer({ port: WS_PORT });
 console.log(`🚀 WebSocket 等待 NapCat: ws://127.0.0.1:${WS_PORT}`);
@@ -351,7 +356,36 @@ wss.on('connection', (ws) => {
 
   ws.on('message', async (data) => {
     try {
-      await handleEvent(JSON.parse(data.toString()));
+      const msg = JSON.parse(data.toString());
+      
+      // 处理 OneBot API 请求
+      if (msg.action) {
+        const { action, params, echo } = msg;
+        
+        // 响应 get_supported_actions API
+        if (action === 'get_supported_actions') {
+          ws.send(JSON.stringify({
+            status: 'ok',
+            retcode: 0,
+            data: ['send_private_msg', 'get_supported_actions'],
+            echo: echo
+          }));
+          return;
+        }
+        
+        // 其他API请求返回不支持
+        ws.send(JSON.stringify({
+          status: 'failed',
+          retcode: 10004,
+          data: null,
+          msg: 'Unsupported action',
+          echo: echo
+        }));
+        return;
+      }
+      
+      // 处理事件
+      await handleEvent(msg);
     } catch (err) {
       console.error('处理消息失败:', err);
     }
@@ -370,7 +404,8 @@ const COMMANDS = {
 /help - 显示此帮助
 /new - 开始新对话
 /person <序号> - 切换人格
-/person_ls - 查看人格列表`,
+/person_ls - 查看人格列表
+/add - 添加新人格`,
 
   '/new': (userId) => {
     sessions.delete(userId);
@@ -393,6 +428,11 @@ const COMMANDS = {
     session.history = [];
     return `✅ 已切换到人格「${persona.name}」，对话已重置`;
   },
+
+  '/add': async (userId) => {
+    addPersonaStates.set(userId, { step: 'waiting_name' });
+    return '📝 开始添加新人格\n\n请发送人格的昵称（例如：温柔助手、技术专家等）';
+  },
 };
 
 async function handleEvent(event) {
@@ -413,6 +453,72 @@ async function handleEvent(event) {
     chatUser = new ChatUser({ userId, nickname });
   } else {
     chatUser.nickname = nickname;
+  }
+
+  // 检查是否处于添加人格流程
+  const addState = addPersonaStates.get(userId);
+  if (addState) {
+    if (message.startsWith('/')) {
+      // 如果输入指令，取消添加流程
+      addPersonaStates.delete(userId);
+      const [cmd] = message.split(' ');
+      const handler = COMMANDS[cmd];
+      if (handler) {
+        const reply =
+          typeof handler === 'function'
+            ? cmd === '/person'
+              ? await handler(userId, message.split(' ').slice(1).join(' '))
+              : await handler(userId)
+            : handler;
+        await sendPrivateMessage(userId, reply);
+        return;
+      }
+    }
+
+    if (addState.step === 'waiting_name') {
+      // 接收人格昵称
+      const name = message.trim();
+      if (!name) {
+        await sendPrivateMessage(userId, '❌ 人格昵称不能为空，请重新输入：');
+        return;
+      }
+      addState.step = 'waiting_prompt';
+      addState.name = name;
+      await sendPrivateMessage(userId, `✅ 已记录人格昵称：${name}\n\n请发送人格的提示词（系统提示词，用于定义人格的行为和特点）：`);
+      return;
+    } else if (addState.step === 'waiting_prompt') {
+      // 接收人格提示词
+      const prompt = message.trim();
+      if (!prompt) {
+        await sendPrivateMessage(userId, '❌ 提示词不能为空，请重新输入：');
+        return;
+      }
+
+      try {
+        // 获取最大序号
+        const maxOrderPersona = await Persona.findOne().sort({ order: -1 });
+        const newOrder = maxOrderPersona ? maxOrderPersona.order + 1 : 1;
+
+        // 创建新人格
+        const newPersona = new Persona({
+          order: newOrder,
+          name: addState.name,
+          prompt: prompt,
+          isDefault: false,
+        });
+        await newPersona.save();
+
+        // 清除状态
+        addPersonaStates.delete(userId);
+
+        await sendPrivateMessage(userId, `✅ 人格添加成功！\n\n📋 人格信息：\n昵称：${addState.name}\n序号：${newOrder}\n提示词：${prompt}\n\n使用 /person ${newOrder} 切换到该人格`);
+      } catch (err) {
+        console.error('添加人格失败:', err);
+        addPersonaStates.delete(userId);
+        await sendPrivateMessage(userId, '❌ 添加人格失败，请稍后重试');
+      }
+      return;
+    }
   }
 
   // 指令

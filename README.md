@@ -123,29 +123,64 @@ pnpm dev
 
 ## 🚀 部署到云服务器
 
-### SSH 远程部署（推荐）
+### 一键部署脚本
 
-从 Windows 通过 SSH 部署到 Linux 云服务器：
+在 Linux 服务器上运行以下命令即可自动部署：
 
-```powershell
-# 交互式部署
-.\deploy-ssh.ps1
-
-# 或指定参数
-.\deploy-ssh.ps1 -ServerIP "your-server-ip" -Username "root" -SSHKeyPath "C:\Users\YourName\.ssh\id_rsa"
+```bash
+# 下载并运行部署脚本
+curl -o deploy.sh https://raw.githubusercontent.com/diyishaoshuai/qqAiChatBot/main/deploy.sh
+chmod +x deploy.sh
+sudo ./deploy.sh
 ```
 
-详细说明请参考：[SSH 部署指南](docs/SSH_DEPLOYMENT.md)
+部署脚本会自动完成以下操作：
+1. 安装 Node.js、pnpm、pm2、nginx、MongoDB
+2. 克隆项目代码并安装依赖
+3. 构建前端并配置 nginx
+4. 启动后端服务（使用 pm2 管理）
+5. 配置防火墙规则
+6. 下载 NapCat 安装脚本
 
-### 其他部署方式
+部署完成后，按照提示运行 NapCat 安装脚本并配置 QQ 机器人。
 
-- **Linux 服务器直接部署**：使用 `deploy.sh` 或 `deploy-aliyun.sh`
-- **Windows 服务器部署**：使用 `deploy-windows.ps1`
+### 手动部署
 
-更多部署文档：
-- [SSH 远程部署指南](docs/SSH_DEPLOYMENT.md)
-- [阿里云部署指南](docs/ALIYUN_DEPLOYMENT.md)
-- [通用部署指南](docs/DEPLOYMENT_GUIDE.md)
+如果需要手动部署，请参考 `deploy.sh` 脚本中的步骤，或按照"快速开始"章节的说明进行配置。
+
+### Nginx 配置
+
+部署时需要配置 nginx 反向代理，示例配置：
+
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;
+
+    # 前端静态文件
+    location /bot/ {
+        root /var/www;
+        try_files $uri $uri/ /bot/index.html;
+        index index.html;
+    }
+
+    # 后端 API
+    location /api/ {
+        proxy_pass http://127.0.0.1:3002;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+
+**注意事项：**
+- 前端访问路径为 `/bot/`，后端 API 路径为 `/api/`
+- 确保 MongoDB 服务正常运行
+- 修改 `server/.env` 中的管理员账号密码和 JWT 密钥
+- 配置 NapCat 反向 WebSocket 地址为 `ws://your-server:3001`
 
 ## 💬 聊天指令
 
@@ -224,6 +259,12 @@ qqAiChatBot/
 
 ## 📝 更新日志
 
+### v1.2.0 (2025-12-22)
+- 修复 nginx 配置导致的页面刷新 404 问题
+- 修复 API 代理配置，解决登录失败问题
+- 优化部署脚本，支持一键部署
+- 完善项目文档
+
 ### v1.1.0
 - 数据改为 MongoDB 持久化
 - 新增后台登录认证
@@ -236,6 +277,27 @@ qqAiChatBot/
 - 连续对话 + 历史压缩
 - Web 管理后台
 - 分段发送功能
+
+## ⚠️ 注意事项
+
+1. **安全性**
+   - 部署到生产环境前，务必修改 `.env` 中的默认密码和 JWT 密钥
+   - 建议配置 HTTPS 和防火墙规则
+   - 不要将 `.env` 文件提交到 Git 仓库
+
+2. **MongoDB**
+   - 确保 MongoDB 服务正常运行
+   - 建议定期备份数据库
+   - 生产环境建议使用 MongoDB 副本集
+
+3. **NapCat**
+   - 需要先登录 QQ 账号
+   - 配置反向 WebSocket 地址为 `ws://your-server:3001`
+   - 建议使用 Docker 方式运行 NapCat
+
+## 🤝 贡献
+
+欢迎提交 Issue 和 Pull Request！
 
 ## 📄 License
 
