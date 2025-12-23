@@ -1,0 +1,65 @@
+name: Deploy to Server
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build frontend
+        run: pnpm run build
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add server to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy frontend
+        run: |
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "rm -rf /var/www/bot && mkdir -p /var/www/bot"
+          scp -r dist/* ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/var/www/bot/
+
+      - name: Deploy backend
+        run: |
+          scp server/index.js ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/root/qqchatbot/server/
+          scp server/package.json ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/root/qqchatbot/server/
+
+      - name: Install dependencies and restart service
+        run: |
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
+            cd /root/qqchatbot/server
+            pnpm install
+            pm2 restart qqchatbot
+          EOF
+
+      - name: Verify deployment
+        run: |
+          sleep 5
+          curl -f https://qqaibot.filingservice.cn/health || exit 1
+          echo "✅ Deployment successful!"
