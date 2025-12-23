@@ -79,7 +79,8 @@ const commands = [
   { cmd: '/help', desc: '显示指令帮助列表' },
   { cmd: '/new', desc: '清空当前对话，开始新会话' },
   { cmd: '/person <序号>', desc: '切换人格 (用法: /person 1)' },
-  { cmd: '/person_ls', desc: '显示可用人格列表' }
+  { cmd: '/person_ls', desc: '显示可用人格列表' },
+  { cmd: '/add', desc: '添加新人格（交互式引导）' }
 ]
 </script>
 
@@ -110,7 +111,7 @@ const commands = [
           <el-input v-model="config.baseURL" placeholder="https://api.openai.com/v1" />
         </el-form-item>
         <el-form-item label="最大Token">
-          <el-input-number v-model="config.maxTokens" :min="100" :max="8000" :step="100" style="width: 200px" />
+          <el-input-number v-model="config.maxTokens" :min="100" :max="1000000" :step="100" style="width: 200px" />
         </el-form-item>
         <el-form-item label="温度">
           <el-slider v-model="config.temperature" :min="0" :max="2" :step="0.1" show-input style="max-width: 400px" />

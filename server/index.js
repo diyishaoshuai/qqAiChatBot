@@ -294,7 +294,7 @@ const schemas = {
   config: Joi.object({
     provider: Joi.string().valid('openai', 'deepseek').optional(),
     model: Joi.string().max(100).optional(),
-    maxTokens: Joi.number().integer().min(1).max(10000).optional(),
+    maxTokens: Joi.number().integer().min(1).max(1000000).optional(),
     temperature: Joi.number().min(0).max(2).optional(),
     maxHistoryLength: Joi.number().integer().min(1).max(100).optional(),
     summaryThreshold: Joi.number().integer().min(1).max(50).optional(),

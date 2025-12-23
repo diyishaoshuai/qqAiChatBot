@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
+import Sortable from 'sortablejs'
 
 interface Persona {
   id: string
@@ -14,13 +15,16 @@ interface Persona {
 const personas = ref<Persona[]>([])
 const dialogVisible = ref(false)
 const editingPersona = ref<Persona | null>(null)
-const form = ref({ name: '', prompt: '', order: 1 })
+const form = ref({ name: '', prompt: '' })
 const loading = ref(false)
+let sortableInstance: Sortable | null = null
 
 async function loadPersonas() {
   try {
     const res = await axios.get('/api/personas')
     personas.value = res.data.sort((a: Persona, b: Persona) => a.order - b.order)
+    await nextTick()
+    initSortable()
   } catch {
     personas.value = [
       { id: 'default', order: 1, name: '默认助手', prompt: '你是一个友好的AI助手。', isDefault: true }
@@ -28,14 +32,51 @@ async function loadPersonas() {
   }
 }
 
+function initSortable() {
+  const tableBody = document.querySelector('.el-table__body-wrapper tbody')
+  if (!tableBody || sortableInstance) return
+
+  sortableInstance = Sortable.create(tableBody as HTMLElement, {
+    animation: 150,
+    handle: '.drag-handle',
+    ghostClass: 'sortable-ghost',
+    onEnd: async (evt) => {
+      const { oldIndex, newIndex } = evt
+      if (oldIndex === newIndex || oldIndex === undefined || newIndex === undefined) return
+
+      // 更新本地顺序
+      const movedItem = personas.value.splice(oldIndex, 1)[0]
+      personas.value.splice(newIndex, 0, movedItem)
+
+      // 更新所有人格的序号
+      try {
+        const updates = personas.value.map((p, index) => ({
+          id: p.id,
+          order: index + 1
+        }))
+
+        // 批量更新序号
+        for (const update of updates) {
+          await axios.put(`/api/personas/${update.id}`, { order: update.order })
+        }
+
+        ElMessage.success('排序已更新')
+        loadPersonas()
+      } catch {
+        ElMessage.error('排序更新失败')
+        loadPersonas()
+      }
+    }
+  })
+}
+
 function openDialog(persona?: Persona) {
   if (persona) {
     editingPersona.value = persona
-    form.value = { name: persona.name, prompt: persona.prompt, order: persona.order }
+    form.value = { name: persona.name, prompt: persona.prompt }
   } else {
     editingPersona.value = null
-    const maxOrder = Math.max(...personas.value.map(p => p.order), 0)
-    form.value = { name: '', prompt: '', order: maxOrder + 1 }
+    form.value = { name: '', prompt: '' }
   }
   dialogVisible.value = true
 }
@@ -86,20 +127,6 @@ async function setDefault(persona: Persona) {
   }
 }
 
-async function moveOrder(persona: Persona, direction: 'up' | 'down') {
-  const idx = personas.value.findIndex(p => p.id === persona.id)
-  const targetIdx = direction === 'up' ? idx - 1 : idx + 1
-  if (targetIdx < 0 || targetIdx >= personas.value.length) return
-  
-  const target = personas.value[targetIdx]
-  if (!target) return
-  try {
-    await axios.post('/api/personas/swap-order', { id1: persona.id, id2: target!.id })
-    loadPersonas()
-  } catch {
-    ElMessage.error('调整失败')
-  }
-}
 
 onMounted(loadPersonas)
 </script>
@@ -117,7 +144,14 @@ onMounted(loadPersonas)
         </div>
       </template>
       
-      <el-table :data="personas" stripe>
+      <el-table :data="personas" stripe row-key="id">
+        <el-table-column label="" width="50" align="center">
+          <template #default>
+            <el-icon class="drag-handle" style="cursor: move; font-size: 18px;">
+              <Rank />
+            </el-icon>
+          </template>
+        </el-table-column>
         <el-table-column prop="order" label="序号" width="80" align="center" />
         <el-table-column prop="name" label="名称" width="150">
           <template #default="{ row }">
@@ -126,12 +160,6 @@ onMounted(loadPersonas)
           </template>
         </el-table-column>
         <el-table-column prop="prompt" label="提示词" show-overflow-tooltip />
-        <el-table-column label="排序" width="100" align="center">
-          <template #default="{ row, $index }">
-            <el-button size="small" :icon="Top" circle :disabled="$index === 0" @click="moveOrder(row, 'up')" />
-            <el-button size="small" :icon="Bottom" circle :disabled="$index === personas.length - 1" @click="moveOrder(row, 'down')" />
-          </template>
-        </el-table-column>
         <el-table-column label="操作" width="220">
           <template #default="{ row }">
             <el-button size="small" @click="openDialog(row)">编辑</el-button>
@@ -141,14 +169,14 @@ onMounted(loadPersonas)
         </el-table-column>
       </el-table>
       
-      <div class="tip">用户使用 /person 序号 切换人格，如 /person 1</div>
+      <div class="tip">
+        <div>💡 拖拽左侧图标可调整人格顺序</div>
+        <div>用户使用 /person 序号 切换人格，如 /person 1</div>
+      </div>
     </el-card>
 
     <el-dialog v-model="dialogVisible" :title="editingPersona ? '编辑人格' : '新建人格'" width="500px">
       <el-form :model="form" label-width="80px">
-        <el-form-item label="序号">
-          <el-input-number v-model="form.order" :min="1" :max="99" />
-        </el-form-item>
         <el-form-item label="名称">
           <el-input v-model="form.name" placeholder="如：猫娘、程序员助手" />
         </el-form-item>
@@ -165,8 +193,8 @@ onMounted(loadPersonas)
 </template>
 
 <script lang="ts">
-import { Top, Bottom } from '@element-plus/icons-vue'
-export default { components: { Top, Bottom } }
+import { Rank } from '@element-plus/icons-vue'
+export default { components: { Rank } }
 </script>
 
 <style scoped>
@@ -184,5 +212,24 @@ export default { components: { Top, Bottom } }
   margin-top: 16px;
   color: #909399;
   font-size: 13px;
+}
+
+.tip > div {
+  margin-bottom: 4px;
+}
+
+.sortable-ghost {
+  opacity: 0.4;
+  background: #f0f9ff;
+}
+
+.drag-handle {
+  cursor: move;
+  color: #909399;
+  transition: color 0.3s;
+}
+
+.drag-handle:hover {
+  color: #409eff;
 }
 </style>
