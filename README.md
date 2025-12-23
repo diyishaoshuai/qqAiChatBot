@@ -5,13 +5,16 @@
 ## ✨ 功能特性
 
 - 🤖 **多模型支持** - 支持 OpenAI (GPT-3.5/4) 和 DeepSeek 大模型
-- 🎭 **多人格系统** - 可创建多个 AI 人格，用户通过指令切换
+- 🎭 **多人格系统** - 可创建多个 AI 人格，支持拖拽排序，用户通过指令切换
 - 💬 **连续对话** - 支持上下文记忆，智能压缩长对话节省 Token
 - 📊 **数据统计** - 消息数、Token 消耗、用户排行榜等
 - 🎯 **分段发送** - 长消息智能拆分，模拟真人打字效果
 - 🌐 **Web 管理后台** - 可视化配置、查看聊天记录
-- 🔐 **登录认证** - 后台需登录后使用
+- 🔐 **登录认证** - 后台需登录后使用，支持速率限制和输入验证
 - 🗄 **MongoDB 存储** - 配置/人格/用户/消息均存储在 MongoDB
+- 🚀 **自动部署** - 支持 GitHub Actions CI/CD 自动部署
+- 📝 **结构化日志** - 使用 Winston 记录详细的运行日志
+- ✨ **交互式添加人格** - 支持通过 `/add` 命令在 QQ 中添加新人格
 
 ## 📸 截图
 
@@ -28,7 +31,7 @@
 
 ### 人格管理
 - 创建/编辑/删除人格
-- 调整人格序号
+- 拖拽排序（无需手动修改序号）
 - 设置默认人格
 
 ### 消息记录
@@ -123,26 +126,30 @@ pnpm dev
 
 ## 🚀 部署到云服务器
 
-### 一键部署脚本
+### 方式一：GitHub Actions 自动部署（推荐）
 
-在 Linux 服务器上运行以下命令即可自动部署：
+配置 GitHub Actions 后，每次推送代码到 `main` 分支会自动部署到服务器。
 
-```bash
-# 下载并运行部署脚本
-curl -o deploy.sh https://raw.githubusercontent.com/diyishaoshuai/qqAiChatBot/main/deploy.sh
-chmod +x deploy.sh
-sudo ./deploy.sh
+**配置步骤：**
+
+1. 在 GitHub 仓库中配置 Secrets（Settings > Secrets and variables > Actions）：
+   - `SSH_PRIVATE_KEY` - 服务器 SSH 私钥
+   - `SERVER_HOST` - 服务器 IP（如 `120.26.41.79`）
+   - `SERVER_USER` - 服务器用户名（如 `root`）
+
+2. 推送代码到 `main` 分支，自动触发部署
+
+详细配置说明请查看 [DEPLOY.md](./DEPLOY.md)
+
+### 方式二：本地一键部署
+
+使用 PowerShell 脚本一键部署到服务器：
+
+```powershell
+.\deploy.ps1
 ```
 
-部署脚本会自动完成以下操作：
-1. 安装 Node.js、pnpm、pm2、nginx、MongoDB
-2. 克隆项目代码并安装依赖
-3. 构建前端并配置 nginx
-4. 启动后端服务（使用 pm2 管理）
-5. 配置防火墙规则
-6. 下载 NapCat 安装脚本
-
-部署完成后，按照提示运行 NapCat 安装脚本并配置 QQ 机器人。
+脚本会自动完成构建、上传、安装依赖、重启服务等所有步骤。
 
 ### 手动部署
 
@@ -190,26 +197,32 @@ server {
 | `/new` | 清空对话，开始新会话 | `/new` |
 | `/person <序号>` | 切换到指定人格 | `/person 2` |
 | `/person_ls` | 查看可用人格列表 | `/person_ls` |
+| `/add` | 交互式添加新人格 | `/add` |
 
 ## 📁 项目结构
 
 ```
 qqAiChatBot/
-├── server/                 # 后端服务
-│   ├── index.js            # 主程序（WebSocket + HTTP API）
-│   ├── env.example         # 环境变量模板
+├── .github/
+│   └── workflows/
+│       └── deploy.yml       # GitHub Actions 自动部署配置
+├── server/                  # 后端服务
+│   ├── index.js             # 主程序（WebSocket + HTTP API）
+│   ├── env.example          # 环境变量模板
 │   ├── package.json
-│   └── *.json              # 运行时数据文件（已 gitignore）
-├── src/                    # 前端 Vue 项目
+│   └── logs/                # 日志目录（Winston）
+├── src/                     # 前端 Vue 项目
 │   ├── views/
-│   │   ├── Dashboard.vue   # 仪表盘
-│   │   ├── Config.vue      # 配置管理
-│   │   ├── Personas.vue    # 人格管理
-│   │   ├── Records.vue     # 用户列表
-│   │   └── ChatDetail.vue  # 聊天详情
-│   ├── router/index.ts     # 路由配置
-│   ├── App.vue             # 主布局
-│   └── main.ts             # 入口文件
+│   │   ├── Dashboard.vue    # 仪表盘
+│   │   ├── Config.vue       # 配置管理
+│   │   ├── Personas.vue     # 人格管理（支持拖拽排序）
+│   │   ├── Records.vue      # 用户列表
+│   │   └── ChatDetail.vue   # 聊天详情
+│   ├── router/index.ts      # 路由配置
+│   ├── App.vue              # 主布局
+│   └── main.ts              # 入口文件
+├── deploy.ps1               # 本地一键部署脚本
+├── DEPLOY.md                # 部署配置说明文档
 ├── .gitignore
 ├── README.md
 └── package.json
@@ -235,7 +248,7 @@ qqAiChatBot/
 在管理后台可以配置：
 - **模型提供商**：OpenAI / DeepSeek
 - **模型**：GPT-3.5-Turbo / GPT-4 / DeepSeek Chat 等
-- **最大 Token**：单次回复的最大 Token 数
+- **最大 Token**：单次回复的最大 Token 数（最高 1,000,000）
 - **温度**：回复的随机性（0-2）
 - **分段发送**：长消息是否拆分发送
 - **全局约束提示词**：约束所有人格的基础规则
@@ -248,16 +261,41 @@ qqAiChatBot/
 - Element Plus (UI 组件库)
 - ECharts (图表)
 - Vue Router + Pinia
+- Sortable.js (拖拽排序)
 
 **后端**
-- Node.js
+- Node.js + Express
 - WebSocket (ws)
 - OpenAI SDK
+- MongoDB + Mongoose
+- Winston (日志系统)
+- Joi (输入验证)
+- express-rate-limit (速率限制)
 
 **QQ 协议**
 - NapCat (OneBot 11 协议)
 
+**部署**
+- GitHub Actions (CI/CD)
+- PM2 (进程管理)
+- Nginx (反向代理)
+
 ## 📝 更新日志
+
+### v1.3.0 (2025-12-23)
+- ✨ 添加人格拖拽排序功能（使用 Sortable.js）
+- ✨ 添加 `/add` 命令支持在 QQ 中交互式添加人格
+- ✨ 配置管理中添加 `/add` 命令说明
+- 🚀 添加 GitHub Actions 自动部署功能
+- 🚀 添加本地一键部署脚本 (deploy.ps1)
+- 📝 添加详细的部署配置文档 (DEPLOY.md)
+- 🔒 添加速率限制（登录 5次/15分钟，API 60次/分钟）
+- 🔒 添加输入验证（使用 Joi）
+- 📝 添加结构化日志系统（使用 Winston）
+- ⚡ 添加数据库索引优化查询性能
+- 🐛 修复 TypeScript 类型错误
+- 🐛 修复 MongoDB 兼容性问题（降级 mongoose 到 7.6.0）
+- 📈 最大 Token 上限提升至 1,000,000
 
 ### v1.2.0 (2025-12-22)
 - 修复 nginx 配置导致的页面刷新 404 问题
