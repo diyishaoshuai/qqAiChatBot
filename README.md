@@ -12,7 +12,6 @@
 - 🌐 **Web 管理后台** - 可视化配置、查看聊天记录
 - 🔐 **登录认证** - 后台需登录后使用，支持速率限制和输入验证
 - 🗄 **MongoDB 存储** - 配置/人格/用户/消息均存储在 MongoDB
-- 🚀 **自动部署** - 支持 GitHub Actions CI/CD 自动部署
 - 📝 **结构化日志** - 使用 Winston 记录详细的运行日志
 - ✨ **交互式添加人格** - 支持通过 `/add` 命令在 QQ 中添加新人格
 
@@ -126,22 +125,7 @@ pnpm dev
 
 ## 🚀 部署到云服务器
 
-### 方式一：GitHub Actions 自动部署（推荐）
-
-配置 GitHub Actions 后，每次推送代码到 `main` 分支会自动部署到服务器。
-
-**配置步骤：**
-
-1. 在 GitHub 仓库中配置 Secrets（Settings > Secrets and variables > Actions）：
-   - `SSH_PRIVATE_KEY` - 服务器 SSH 私钥
-   - `SERVER_HOST` - 服务器 IP（如 `120.26.41.79`）
-   - `SERVER_USER` - 服务器用户名（如 `root`）
-
-2. 推送代码到 `main` 分支，自动触发部署
-
-详细配置说明请查看 [DEPLOY.md](./DEPLOY.md)
-
-### 方式二：本地一键部署
+### 本地一键部署
 
 使用 PowerShell 脚本一键部署到服务器：
 
@@ -203,9 +187,6 @@ server {
 
 ```
 qqAiChatBot/
-├── .github/
-│   └── workflows/
-│       └── deploy.yml       # GitHub Actions 自动部署配置
 ├── server/                  # 后端服务
 │   ├── index.js             # 主程序（WebSocket + HTTP API）
 │   ├── env.example          # 环境变量模板
@@ -222,7 +203,6 @@ qqAiChatBot/
 │   ├── App.vue              # 主布局
 │   └── main.ts              # 入口文件
 ├── deploy.ps1               # 本地一键部署脚本
-├── DEPLOY.md                # 部署配置说明文档
 ├── .gitignore
 ├── README.md
 └── package.json
@@ -276,7 +256,6 @@ qqAiChatBot/
 - NapCat (OneBot 11 协议)
 
 **部署**
-- GitHub Actions (CI/CD)
 - PM2 (进程管理)
 - Nginx (反向代理)
 
@@ -286,9 +265,7 @@ qqAiChatBot/
 - ✨ 添加人格拖拽排序功能（使用 Sortable.js）
 - ✨ 添加 `/add` 命令支持在 QQ 中交互式添加人格
 - ✨ 配置管理中添加 `/add` 命令说明
-- 🚀 添加 GitHub Actions 自动部署功能
 - 🚀 添加本地一键部署脚本 (deploy.ps1)
-- 📝 添加详细的部署配置文档 (DEPLOY.md)
 - 🔒 添加速率限制（登录 5次/15分钟，API 60次/分钟）
 - 🔒 添加输入验证（使用 Joi）
 - 📝 添加结构化日志系统（使用 Winston）
