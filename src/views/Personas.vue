@@ -46,6 +46,7 @@ function initSortable() {
 
       // 更新本地顺序
       const movedItem = personas.value.splice(oldIndex, 1)[0]
+      if (!movedItem) return
       personas.value.splice(newIndex, 0, movedItem)
 
       // 更新所有人格的序号

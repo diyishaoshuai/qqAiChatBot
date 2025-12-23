@@ -37,7 +37,6 @@ server/*.json
 
 # Deployment files
 *.zip
-deploy.ps1
 setup-ssh.ps1
 nginx-bot.conf
 .ssh/
